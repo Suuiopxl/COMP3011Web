@@ -254,6 +254,43 @@ class TestFind:
 
 
 # ---------------------------------------------------------------------------
+# find — --rank flag (stage 7 TF-IDF extension)
+# ---------------------------------------------------------------------------
+class TestFindRankFlag:
+    def test_default_rank_unchanged(self, loaded_shell, capsys):
+        """`find good` must produce the same output as before stage 7."""
+        loaded_shell.execute("find good")
+        out = capsys.readouterr().out
+        assert "score=3)" in out  # integer score, no decimals
+
+    def test_rank_tfidf_uses_float_scores(self, loaded_shell, capsys):
+        loaded_shell.execute("find --rank tfidf good")
+        out = capsys.readouterr().out
+        # TF-IDF scores are formatted with 4 decimals.
+        assert "score=" in out
+        assert "." in out
+
+    def test_rank_tf_explicit_matches_default(self, loaded_shell, capsys):
+        loaded_shell.execute("find good")
+        default_out = capsys.readouterr().out
+        loaded_shell.execute("find --rank tf good")
+        explicit_out = capsys.readouterr().out
+        assert default_out == explicit_out
+
+    def test_rank_with_invalid_mode_shows_usage(self, loaded_shell, capsys):
+        loaded_shell.execute("find --rank bm25 good")
+        assert "Usage:" in capsys.readouterr().out
+
+    def test_rank_flag_without_value_shows_usage(self, loaded_shell, capsys):
+        loaded_shell.execute("find --rank")
+        assert "Usage:" in capsys.readouterr().out
+
+    def test_rank_with_no_query_after_shows_usage(self, loaded_shell, capsys):
+        loaded_shell.execute("find --rank tfidf")
+        assert "Usage:" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # REPL loop — exit handling
 # ---------------------------------------------------------------------------
 class TestReplExitPaths:

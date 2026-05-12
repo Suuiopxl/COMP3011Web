@@ -268,3 +268,145 @@ class TestSearchResultType:
         # Tuple-style and named-attribute access both work.
         assert r.url == r[0]
         assert r.score == r[1]
+
+
+# ---------------------------------------------------------------------------
+# TF-IDF ranking (stage 7 extension)
+# ---------------------------------------------------------------------------
+import math
+
+
+class TestTfidfRanking:
+    @pytest.fixture
+    def biased_idx(self):
+        """A corpus designed so TF-IDF and TF rank DIFFERENTLY.
+
+        Mapping (term, url) -> tf::
+
+                  | u1 u2 u3 u4
+            rare  |  1  0  0  0
+            common|  3  1  1  1     (appears in every doc)
+        """
+        return {
+            "index": {
+                "rare": {
+                    "df": 1,
+                    "postings": {"u1": _posting(1)},
+                },
+                "common": {
+                    "df": 4,
+                    "postings": {
+                        "u1": _posting(3),
+                        "u2": _posting(1),
+                        "u3": _posting(1),
+                        "u4": _posting(1),
+                    },
+                },
+            },
+            "doc_lengths": {"u1": 10, "u2": 10, "u3": 10, "u4": 10},
+            "num_docs": 4,
+        }
+
+    def test_unknown_rank_mode_raises(self, idx):
+        with pytest.raises(ValueError, match="Unknown rank mode"):
+            find("good", idx, rank="bm25")
+
+    def test_default_rank_is_tf(self, idx):
+        assert find("good", idx) == find("good", idx, rank="tf")
+
+    def test_tfidf_returns_same_urls_as_tf(self, idx):
+        # AND-intersection is independent of ranking — only ORDER may differ.
+        tf_urls = {r.url for r in find("good friends", idx, rank="tf")}
+        tfidf_urls = {r.url for r in find("good friends", idx, rank="tfidf")}
+        assert tf_urls == tfidf_urls
+
+    def test_tfidf_score_matches_hand_calculation(self, biased_idx):
+        """Verify the exact formula on a single-term, single-doc case.
+
+        For ``find rare`` on biased_idx:
+            tf = 1, df = 1, N = 4
+            tf_weight  = 1 + log(1)      = 1.0
+            idf_weight = log(5/2) + 1    ≈ 1.9163
+            score      = 1.0 * 1.9163    ≈ 1.9163
+        """
+        results = find("rare", biased_idx, rank="tfidf")
+        assert len(results) == 1
+        expected = (1 + math.log(1)) * (math.log(5 / 2) + 1)
+        assert results[0].score == pytest.approx(expected)
+
+    def test_tfidf_rare_term_has_higher_idf_weight(self, biased_idx):
+        """A rarer term has a strictly larger IDF weight.
+
+        With sklearn-smoothed IDF, ``df=4=N`` does NOT zero out the
+        contribution (that's the whole point of the smoothing), but a
+        rare term still gets a higher per-occurrence weight.
+
+        At tf=1 for both terms, the scores are pure IDF weights:
+            rare:   1 * (log(5/2) + 1) ≈ 1.9163
+            common: 1 * (log(5/5) + 1) = 1.0
+        """
+        # Score on a hypothetical doc where each term has tf=1.
+        # We isolate the IDF effect by comparing terms at equal tf.
+        single_doc_idx = {
+            "index": {
+                "rare":   {"df": 1, "postings": {"u": _posting(1)}},
+                "common": {"df": 4, "postings": {"u": _posting(1)}},
+            },
+            "doc_lengths": {"u": 10},
+            "num_docs": 4,
+        }
+        rare_score = find("rare", single_doc_idx, rank="tfidf")[0].score
+        common_score = find("common", single_doc_idx, rank="tfidf")[0].score
+        assert rare_score > common_score
+
+    def test_tfidf_log_tf_is_sublinear(self, biased_idx):
+        """Doubling raw tf must not double the TF-IDF score."""
+        # u1 has tf=3 for 'common'; we'll construct another doc with tf=6.
+        idx = {
+            "index": {
+                "x": {
+                    "df": 2,
+                    "postings": {"a": _posting(3), "b": _posting(6)},
+                }
+            },
+            "doc_lengths": {"a": 10, "b": 10},
+            "num_docs": 2,
+        }
+        results = {r.url: r.score for r in find("x", idx, rank="tfidf")}
+        # Linear scaling would give b/a = 2.0; log scaling gives < 2.0.
+        ratio = results["b"] / results["a"]
+        assert 1.0 < ratio < 2.0
+
+    def test_tfidf_term_appearing_everywhere_still_contributes(self, biased_idx):
+        """Smoothing avoids the naive-IDF zeroing-out when df == N."""
+        # 'common' appears in all 4 docs — naive log(N/df) would be 0.
+        results = find("common", biased_idx, rank="tfidf")
+        for r in results:
+            assert r.score > 0
+
+
+class TestTfidfFormatting:
+    def test_default_format_uses_integer_scores(self, idx):
+        """Brief example output must remain byte-identical to baseline."""
+        out = format_find("good friends", idx)
+        # Integer scores have no decimal point.
+        assert "score=3)" in out and "score=2)" in out
+        assert ".0" not in out  # no float-looking values
+
+    def test_tfidf_format_uses_four_decimals(self, idx):
+        out = format_find("good friends", idx, rank="tfidf")
+        # Every score line ends with a 4-decimal float.
+        import re
+
+        for line in out.splitlines():
+            m = re.search(r"score=([0-9]+\.[0-9]+)\)", line)
+            if m:
+                # Confirm exactly 4 digits after the decimal point.
+                assert len(m.group(1).split(".")[1]) == 4
+
+    def test_tfidf_empty_query_message_unchanged(self, idx):
+        assert format_find("", idx, rank="tfidf") == "No query given."
+
+    def test_tfidf_no_match_message_unchanged(self, idx):
+        out = format_find("xyz", idx, rank="tfidf")
+        assert out == "No pages contain all of: 'xyz'"
