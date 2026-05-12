@@ -64,12 +64,13 @@ from src.storage import (
 
 
 HELP_TEXT = """Available commands:
-  build           Crawl the website, build the inverted index, and save it.
-  load            Load the previously-saved index from disk.
-  print <word>    Show the inverted index entry for <word>.
-  find <terms>    Find pages containing ALL <terms> (AND query).
-  help            Show this help message.
-  exit / quit     Leave the shell.
+  build                          Crawl the website, build the index, save it.
+  load                           Load the previously-saved index from disk.
+  print <word>                   Show the inverted index entry for <word>.
+  find <terms>                   Find pages containing ALL <terms> (AND query).
+  find --rank tfidf <terms>      Same, but rank results by TF-IDF score.
+  help                           Show this help message.
+  exit / quit                    Leave the shell.
 """
 
 BANNER = (
@@ -187,12 +188,34 @@ class SearchEngineShell:
 
     def _cmd_find(self, arg: str) -> None:
         if not arg:
-            print("Usage: find <term> [<term> ...]")
+            print("Usage: find [--rank tf|tfidf] <term> [<term> ...]")
             return
         if self.index is None:
             print("No index loaded. Run 'build' or 'load' first.")
             return
-        print(format_find(arg, self.index))
+        rank, query = self._parse_find_args(arg)
+        if rank is None:
+            print("Usage: find [--rank tf|tfidf] <term> [<term> ...]")
+            return
+        if not query:
+            print("Usage: find [--rank tf|tfidf] <term> [<term> ...]")
+            return
+        print(format_find(query, self.index, rank=rank))
+
+    @staticmethod
+    def _parse_find_args(arg: str):
+        """Pull an optional ``--rank <mode>`` flag off the front of ``arg``.
+
+        Returns ``(rank, remaining_query)`` on success, or ``(None, "")``
+        if the flag is malformed. Keeps brief-style ``find good friends``
+        working unchanged when no flag is present.
+        """
+        parts = arg.split()
+        if parts[:1] != ["--rank"]:
+            return "tf", arg
+        if len(parts) < 2 or parts[1] not in ("tf", "tfidf"):
+            return None, ""
+        return parts[1], " ".join(parts[2:])
 
     def _cmd_help(self, arg: str) -> None:
         print(HELP_TEXT, end="")
