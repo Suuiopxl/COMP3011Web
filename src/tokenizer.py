@@ -5,25 +5,6 @@ Tokenizer module
 Converts raw text (page content or user queries) into a normalised list of
 tokens that can be used as keys in the inverted index.
 
-Design decisions (justify these in the video):
-
-1. **Case-insensitive**: All text is lower-cased before tokenisation so that
-   "Good" and "good" map to the same token, as required by the brief.
-
-2. **Split on any non-alphanumeric character**: We use the regex ``[a-z0-9]+``
-   to extract maximal runs of letters and digits. This means:
-
-   * Punctuation (``.``, ``,``, ``;`` …) acts as a separator.
-   * Apostrophes are treated as separators too, so ``"don't"`` becomes
-     ``["don", "t"]``. The same rule is applied at query time, so a search
-     for ``"don't"`` will still match documents that contain the contraction.
-   * Hyphens split words: ``"well-known"`` → ``["well", "known"]``.
-   * Numbers are kept as tokens: ``"1999"`` is a valid search term.
-
-3. **No stop-word removal and no stemming**: The brief asks us to index
-   *all* word occurrences, so we deliberately keep words such as "the",
-   "a", "is" and we do not collapse "running" to "run". Keeping the
-   pipeline simple also avoids introducing extra dependencies (e.g. NLTK).
 """
 
 from __future__ import annotations

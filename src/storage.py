@@ -4,35 +4,6 @@ Storage module
 
 Persists the inverted index to disk and loads it back.
 
-Design decisions (defend these in the video)
---------------------------------------------
-
-1. **JSON, not pickle.** The coursework brief asks us to *submit* the
-   compiled index file alongside the source code. JSON is plain text
-   — the marker can open it in any editor and confirm that the
-   index actually contains what we claim. Pickle is opaque, version-
-   coupled to Python, and has well-known deserialisation security
-   risks. The serialised size for our 10-page corpus is ~150 KB
-   pretty-printed: trivial.
-
-2. **Pretty-printed (``indent=2``).** Optimised for human inspection
-   rather than disk space, in line with point 1.
-
-3. **Path is configurable; default is ``data/index.json``.** Matches
-   the repository layout in the brief and lets tests inject
-   ``tmp_path`` to avoid touching the real filesystem.
-
-4. **Atomic writes via temp-file + rename.** ``Path.write_text`` is
-   *not* atomic: a process killed mid-write leaves a truncated file
-   that would later raise an obscure JSON decode error. Writing to
-   ``index.json.tmp`` and then ``os.replace``-ing it onto the final
-   path means the user either sees the old index or the new one —
-   never a half-written one.
-
-5. **Custom ``IndexNotFoundError``** (subclass of
-   ``FileNotFoundError``). Lets the CLI distinguish "the user has not
-   run ``build`` yet" from any other I/O error, while still allowing
-   generic ``except FileNotFoundError`` handlers to work.
 """
 
 from __future__ import annotations

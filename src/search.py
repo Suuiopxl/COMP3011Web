@@ -22,36 +22,6 @@ The default ranking and output format are **byte-for-byte identical**
 to the original specification so the brief's example commands behave
 exactly as documented.
 
-Design decisions for TF-IDF (defend these in the video)
--------------------------------------------------------
-
-1. **Smoothed IDF: ``log((N+1)/(df+1)) + 1``.** The same formula
-   scikit-learn uses by default. The ``+1`` smoothing avoids two
-   pathologies:
-
-   * ``df = N`` (term appears in every document) would otherwise give
-     ``log(1) = 0``, zeroing out the term's contribution entirely. In
-     our 10-page corpus the word "friends" appears on every page (it
-     is in every page's sidebar), and naive IDF would silently drop
-     it from queries.
-   * ``df = 0`` (term not in vocab) is impossible here because we
-     intersect first, but the smoothing makes the formula safe to
-     reuse on out-of-vocabulary terms.
-
-2. **Logarithmic TF: ``1 + log(tf)``.** Salton 1988's classic
-   sub-linear TF transform. A word appearing 100 times should not be
-   100× more important than appearing once — empirically it isn't,
-   and the log dampens that effect (tf=1 → 1.0, tf=10 → 3.3,
-   tf=100 → 5.6).
-
-3. **Natural log (``math.log``).** The choice of log base only
-   rescales all scores by a constant, so it has zero effect on
-   ranking order. Using natural log keeps the implementation a single
-   readable expression with no ``math.log(..., 2)`` clutter.
-
-4. **No length normalisation in this stage.** We have ``doc_lengths``
-   in the index so a future BM25-style extension can add it without
-   re-crawling.
 """
 
 from __future__ import annotations

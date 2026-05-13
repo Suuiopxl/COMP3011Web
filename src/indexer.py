@@ -31,32 +31,6 @@ A single in-memory ``dict`` with three top-level keys::
         "num_docs": 10
     }
 
-Design decisions
-----------------
-
-1. **Term-level fields**: ``tf`` (term frequency in a doc), ``df``
-   (number of docs containing the term), and ``positions`` (zero-indexed
-   offsets into the document's token stream). The brief specifies that
-   the index "stores statistics (e.g. frequency, **position**, etc)"
-   so we store both. Positions also enable future phrase queries.
-
-2. **Per-document length**: stored separately so TF-IDF normalisation
-   can be added later without re-crawling. ``len(tokens)`` is recorded
-   *before* deduplication, i.e. it counts every token occurrence.
-
-3. **Top-level ``num_docs``**: kept explicit (rather than derived from
-   ``len(doc_lengths)``) so that the IDF formula ``log(N / df)`` reads
-   naturally and is robust to manual index editing.
-
-4. **Plain dict, not a class**: the index is JSON-serialisable for
-   free (used by ``storage.py``) and easy to introspect at the Python
-   REPL. ``TypedDict`` hints document the structure without imposing
-   runtime overhead.
-
-5. **Tokenizer reused from ``src.tokenizer``**: the *exact same*
-   normalisation pipeline runs at index time and at query time, which
-   is the only way to guarantee that ``Good`` written in a quote can
-   be found by typing ``good``.
 """
 
 from __future__ import annotations

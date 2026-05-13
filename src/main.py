@@ -10,38 +10,7 @@ written there: ``build``, ``load``, ``print <word>``, ``find <terms>``.
 A small ``help`` command and graceful exit paths (``exit`` / ``quit`` /
 Ctrl-D / Ctrl-C) round out the user experience.
 
-Design decisions (defend these in the video)
---------------------------------------------
 
-1. **REPL, not a one-shot argparse CLI.** The brief explicitly shows
-   commands at a ``>`` prompt — i.e. an interactive shell. Re-loading
-   the index for every query (a one-shot CLI's only option) would
-   also feel sluggish during the live demo.
-
-2. **Index resident in memory across commands.** The shell holds the
-   index in an instance attribute, so ``build``/``load`` is paid once
-   and every subsequent ``find``/``print`` is microseconds.
-
-3. **Compute/format/loop separation.**
-
-   * :class:`SearchEngineShell.execute` is a *pure* dispatcher that
-     processes one command line — no ``input()`` calls. This makes
-     command-level behaviour trivial to unit-test.
-   * :class:`SearchEngineShell.run_repl` is a thin loop that reads
-     stdin and feeds lines to ``execute``. It contains only the
-     concerns specific to running an interactive session (prompt,
-     EOF, Ctrl-C).
-
-4. **Defensive guards before every search.** ``print`` and ``find``
-   first check that an index is loaded; otherwise they nudge the user
-   toward ``build`` or ``load`` instead of throwing an
-   ``AttributeError`` on ``None``.
-
-5. **Three exit paths, all silent.** ``exit``/``quit`` keywords,
-   ``EOFError`` (Ctrl-D), and ``KeyboardInterrupt`` (Ctrl-C) all leave
-   cleanly. The Ctrl-C handler in particular suppresses the
-   ``Traceback (most recent call last):...`` Python would print by
-   default — which looks unprofessional in a recorded demo.
 """
 
 from __future__ import annotations
