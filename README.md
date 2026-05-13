@@ -485,6 +485,7 @@ dedicated tests in `TestTfidfRanking` and `TestTfidfFormatting`.
   4. Debug and verify the accuracy of the output.
   5. Analyze the scoring criteria to ensure the practice meets the relevant requirements.
   6. Explain the concepts.
+  7. Generate the video slides.
   The GenAI conversation records have been saved in the GitHub repository.
 
  
