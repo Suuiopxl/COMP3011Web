@@ -1,0 +1,39 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ 
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+ 
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+ 
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+ 
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+ 
+# OS junk
+Thumbs.db
+ 
+# Project-specific:
+# Keep data/ folder structure but ignore everything except the final
+# submitted index. Uncomment the next two lines if you want to ignore
+# intermediate indexes while developing.
+# data/*
+# !data/.gitkeep
