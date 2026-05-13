@@ -4,40 +4,6 @@ Crawler module
 
 BFS web crawler for ``quotes.toscrape.com``.
 
-Design decisions (defend these in the video)
---------------------------------------------
-
-1. **Pagination only.**
-   We follow the "Next →" link from ``/page/1/`` through ``/page/10/`` and
-   nothing else. ``/tag/<x>/`` and ``/author/<x>/`` pages contain quotes
-   that *also* appear in the paginated listing, so indexing them would
-   inflate term frequencies without adding any new vocabulary. The
-   simpler page set is also faster to crawl (10 requests × 6 s ≈ 1 min).
-
-2. **BFS traversal with ``collections.deque``.**
-   The standard frontier-queue pattern used by industrial crawlers
-   (Scrapy, Heritrix, …). For a linearly-paginated site BFS and DFS are
-   indistinguishable, but BFS scales naturally if the page set is
-   later expanded and avoids Python's recursion-depth limits.
-
-3. **Visible-text extraction with script/style stripping.**
-   The brief asks us to index *all word occurrences in the pages*, so
-   we keep navigation and footer text — but we strip ``<script>`` and
-   ``<style>`` blocks because their contents are not user-visible and
-   would otherwise pollute the index with JavaScript identifiers.
-
-4. **Politeness window injected at construction time.**
-   The default is 6.0 s (brief requirement). Tests inject ``delay=0``
-   so the suite runs in milliseconds. Crucially, the wait is computed
-   as ``delay − elapsed_since_last_request`` rather than a blind
-   ``sleep(6)``: if HTML parsing took 1 s we only sleep 5 s, which is
-   both polite *and* efficient. The first request is never delayed.
-
-5. **Same-domain link filter.**
-   ``urlparse(link).netloc`` is compared against the base host to
-   defensively reject any cross-domain links (none exist on
-   quotes.toscrape, but the check costs nothing and prevents future
-   surprises).
 """
 
 from __future__ import annotations
