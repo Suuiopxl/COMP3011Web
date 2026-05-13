@@ -47,27 +47,34 @@ COMP3011 Search Engine — quotes.toscrape.com
 Type 'help' for commands, 'exit' or Ctrl-D to quit.
 > build
 Crawling https://quotes.toscrape.com/ (this will take a moment)...
-    [INFO] Crawl finished: 10 page(s) fetched.
-Built index: 10 docs, 845 unique terms. Saved to data/index.json (313.4 KB).
+    [INFO] Crawl finished: 213 URL(s) fetched, 150 unique document(s) indexed.
+Built index: 150 docs, 4563 unique terms. Saved to data/index.json (~2.1 MB).
 > find good friends
-6 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=12)
-  https://quotes.toscrape.com/page/6/   (score=4)
+4 page(s) found:
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-4   (score=5)
+  https://quotes.toscrape.com/tag/life/page/1/#quote-5   (score=4)
   ...
 > exit
 ```
 
-The first `build` takes about 60 s because the crawler waits 6 s between
-requests (the politeness window required by the brief). Subsequent sessions
-can use `load` to skip straight to querying:
+The first `build` takes about 21 minutes because the crawler waits 6 s
+between requests (the politeness window required by the brief) and the
+site has 213 pages. Subsequent sessions can use `load` to skip straight
+to querying:
 
 ```
 > load
-Loaded index: 10 docs, 845 unique terms, from data/index.json.
+Loaded index: 150 docs, 4563 unique terms, from data/index.json.
 > find indifference
 1 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=5)
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-5   (score=5)
 ```
+
+**A note on "documents"**: each document in the index is one *unique
+quote* (deduplicated across pages where the same quote appears) or one
+*author detail page*. The site has 100 distinct quotes and 50 authors,
+so the index contains 150 documents — not 213. See
+[Design decisions](#design-decisions) for the rationale.
 
 ### Requirements
 
@@ -98,7 +105,7 @@ COMP3011Web/
 │   ├── storage.py          # save/load index as JSON, atomic writes
 │   ├── search.py           # print / find logic, TF and TF-IDF ranking
 │   └── main.py             # interactive REPL (build / load / print / find)
-├── tests/                  # 178 tests, 100 % line coverage on src/
+├── tests/                  # 183 tests, 100 % line coverage on src/
 │   ├── test_tokenizer.py
 │   ├── test_crawler.py     # uses requests-mock, no real network in CI
 │   ├── test_indexer.py
@@ -190,22 +197,25 @@ The session below reproduces the brief's three example commands:
 ```
 > print nonsense
 Term 'nonsense' (df=2)
-  https://quotes.toscrape.com/page/2/   tf=1
-  https://quotes.toscrape.com/page/7/   tf=1
+  https://quotes.toscrape.com/page/2/#quote-5                       tf=1
+  https://quotes.toscrape.com/tag/life/page/1/#quote-10             tf=1
 
 > find indifference
 1 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=5)
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-5   (score=5)
 
 > find good friends
-6 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=12)
-  https://quotes.toscrape.com/page/6/   (score=4)
-  https://quotes.toscrape.com/page/7/   (score=3)
-  https://quotes.toscrape.com/   (score=2)
-  https://quotes.toscrape.com/page/3/   (score=2)
-  https://quotes.toscrape.com/page/9/   (score=2)
+4 page(s) found:
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-4   (score=5)
+  https://quotes.toscrape.com/tag/life/page/1/#quote-5            (score=4)
+  https://quotes.toscrape.com/author/George-Eliot                 (score=2)
+  https://quotes.toscrape.com/author/J-K-Rowling                  (score=2)
 ```
+
+Each URL ends with `#quote-N` for quote documents (where N is the
+quote's position on the original page) or with `/author/<name>` for
+author detail pages. This makes every document independently
+addressable in the index.
 
 ### Edge cases
 
@@ -238,25 +248,30 @@ The full set of edge cases is exercised by `scripts/demo_queries.py`.
 ## Index file format
 
 The on-disk index is a single pretty-printed UTF-8 JSON file at
-`data/index.json` (typically ~310 KB). Top-level shape:
+`data/index.json` (~2.1 MB). Top-level shape:
 
 ```json
 {
   "index": {
     "good": {
-      "df": 6,
+      "df": 14,
       "postings": {
-        "https://quotes.toscrape.com/page/2/": {
-          "tf": 3,
-          "positions": [31, 576, 578]
+        "https://quotes.toscrape.com/page/4/#quote-3": {
+          "tf": 2,
+          "positions": [3, 8]
+        },
+        "https://quotes.toscrape.com/author/J-K-Rowling": {
+          "tf": 1,
+          "positions": [47]
         }
       }
     }
   },
   "doc_lengths": {
-    "https://quotes.toscrape.com/page/2/": 642
+    "https://quotes.toscrape.com/page/4/#quote-3": 25,
+    "https://quotes.toscrape.com/author/J-K-Rowling": 110
   },
-  "num_docs": 10
+  "num_docs": 150
 }
 ```
 
@@ -268,7 +283,7 @@ The on-disk index is a single pretty-printed UTF-8 JSON file at
 | `…postings.tf` | Number of times `t` appears in that document               |
 | `…positions`   | Zero-indexed offsets into the document's token stream      |
 | `doc_lengths[u]` | Total number of tokens in document `u` (for TF-IDF/BM25) |
-| `num_docs`     | Total documents in the corpus                              |
+| `num_docs`     | Total documents in the corpus (100 quotes + 50 authors)    |
 
 JSON was chosen over `pickle` because the brief asks for the index file to
 be submitted; a human-readable artifact is easier to inspect and audit. See
@@ -278,7 +293,7 @@ be submitted; a human-readable artifact is easier to inspect and audit. See
 
 ## Testing
 
-The project ships with **178 tests** covering every module. To run them:
+The project ships with **183 tests** covering every module. To run them:
 
 ```bash
 # Run all tests
@@ -296,15 +311,15 @@ Current results:
 ```
 ================ tests coverage =================
 src/__init__.py        0      0   100%
-src/crawler.py        81      0   100%
+src/crawler.py       119      0   100%
 src/indexer.py        33      0   100%
 src/main.py          107      0   100%
 src/search.py         73      0   100%
 src/storage.py        26      0   100%
 src/tokenizer.py       8      0   100%
 -------------------------------------------------
-TOTAL                328      0   100%
-================ 178 passed in 1.4s ==============
+TOTAL                366      0   100%
+================ 183 passed in 1.4s ==============
 ```
 
 ### Testing strategy
@@ -359,16 +374,33 @@ Every decision is also documented in the corresponding module's docstring.
   word occurrences.
 
 ### Crawler (`src/crawler.py`)
-* **Pagination only** (`/page/1/` … `/page/10/`). The tag and author pages
-  contain quotes that also appear in the paginated listing, so visiting
-  them would inflate term frequencies without adding any new vocabulary.
-* **BFS with `collections.deque`**, the standard frontier-queue pattern.
-* **Politeness window is configurable, defaults to 6 s**, and is computed
-  as `delay − elapsed_since_last_request` rather than a blind `sleep(6)`
-  so HTML parsing time counts toward the wait.
-* **Visible-text extraction** strips `<script>` and `<style>` before
-  calling `soup.get_text()`. Navigation and footer text are deliberately
-  kept because the brief asks for *all* word occurrences.
+* **Full-site BFS traversal.** Starting from the home page we follow
+  the `Next →` pagination link, all `/tag/...` listings (with their
+  own pagination), and all `/author/...` detail pages — 213 unique
+  URLs in total. `/login` and `/static/...` are skipped. URLs are
+  normalised (URL fragments stripped) and de-duplicated via a
+  `visited` set, so the dense graph of cross-links cannot cause
+  infinite loops.
+* **BFS with `collections.deque`**, the standard frontier-queue
+  pattern; `popleft()` is O(1) where a Python `list.pop(0)` would
+  be O(n).
+* **Content-aware text extraction.** Each page type has its own
+  content container:
+  - quote-listing pages → every `<div class="quote">`
+  - author detail pages → `<div class="author-details">`
+  Everything else on the page — the site title (`<h1>Quotes to
+  Scrape</h1>`), navigation, "Top Ten tags" sidebar, footer — is
+  *deliberately discarded*. Otherwise searching `find quotes` would
+  return every page just because the site title contains the word.
+* **Quote-level deduplication.** The same quote appears on multiple
+  HTML pages (home listing, tag listings, …). Each quote block is
+  keyed by `(quote_text, author)` and the first occurrence wins,
+  so the inverted index counts each quote exactly once. The result
+  is 100 unique quote documents + 50 author documents = 150 indexed
+  documents, drawn from 213 fetched URLs.
+* **Politeness window is configurable, defaults to 6 s**, and is
+  computed as `delay − elapsed_since_last_request` rather than a
+  blind `sleep(6)` so HTML parsing time counts toward the wait.
 
 ### Indexer (`src/indexer.py`)
 * **Per-term fields stored:** `tf`, `df`, `positions`.
@@ -418,18 +450,18 @@ optional `--rank` flag:
 
 ```
 > find good friends                       # default: sum-of-tf ranking
-6 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=12)
-  ...
+4 page(s) found:
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-4   (score=5)
+  https://quotes.toscrape.com/tag/life/page/1/#quote-5            (score=4)
+  https://quotes.toscrape.com/author/George-Eliot                 (score=2)
+  https://quotes.toscrape.com/author/J-K-Rowling                  (score=2)
 
 > find --rank tfidf good friends          # TF-IDF ranking
-6 page(s) found:
-  https://quotes.toscrape.com/page/2/   (score=6.2444)
-  https://quotes.toscrape.com/page/6/   (score=3.5506)
-  https://quotes.toscrape.com/page/7/   (score=3.4584)
-  https://quotes.toscrape.com/   (score=2.4520)
-  https://quotes.toscrape.com/page/3/   (score=2.4520)
-  https://quotes.toscrape.com/page/9/   (score=2.4520)
+4 page(s) found:
+  https://quotes.toscrape.com/tag/inspirational/page/1/#quote-4   (score=11.7385)
+  https://quotes.toscrape.com/tag/life/page/1/#quote-5            (score=11.5838)
+  https://quotes.toscrape.com/author/George-Eliot                 (score=6.8416)
+  https://quotes.toscrape.com/author/J-K-Rowling                  (score=6.8416)
 ```
 
 ### Formula
@@ -455,9 +487,12 @@ score(q, d)      = Σ contribution for every t in q
 * **Smoothed IDF** (`+1` in both numerator and denominator) is the same
   variant scikit-learn uses by default. It avoids the pathological case
   where a term appearing in every document (`df = N`) gets `log(1) = 0`
-  and is silently dropped from scoring. In our corpus, the word
-  `friends` appears on every page (it is in the sidebar), and naive IDF
-  would zero it out — the smoothing keeps it contributing.
+  and is silently dropped from scoring. With our content-aware
+  crawler the corpus no longer has any literal df=N terms (because
+  navigation and footer chrome are stripped), but the smoothing still
+  matters for *near-ubiquitous* function words like "the" and "and"
+  which have df > 100 / 150 — without it their IDF would round to a
+  very small number and the score would be dominated by noise.
 * **Logarithmic TF** is Salton's classic sub-linear transform: a term
   appearing 100 times is *not* 100× more important than appearing once,
   and the log compresses that effect. A test
@@ -486,7 +521,4 @@ dedicated tests in `TestTfidfRanking` and `TestTfidfFormatting`.
   5. Analyze the scoring criteria to ensure the practice meets the relevant requirements.
   6. Explain the concepts.
   7. Generate the video slides.
-  The GenAI conversation records have been saved in the GitHub repository.
-
- 
-
+* The GenAI conversation records have been saved in the GitHub repository.

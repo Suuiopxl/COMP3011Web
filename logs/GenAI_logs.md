@@ -350,3 +350,106 @@ to English, with file contents summarised by filename only.
 **A:** Produced this document.
 
 ---
+
+## 20. Stage 8 — Responding to the marker's video Q&A
+
+**U:** Forwarded two Q&A exchanges from the module convenor:
+(1) the marker confirmed the site has 213 pages and that a
+"show build, pause recording, resume" video flow is acceptable;
+(2) the marker confirmed that site-wide chrome (the `<h1>Quotes
+to Scrape</h1>` header, navigation, "Login" link, "by Zyte"
+footer) should be **ignored** during indexing, because otherwise
+queries like `find quotes` would return every page.
+
+The student observed that the existing implementation crawled only
+10 paginated pages and indexed all visible text, contradicting both
+points from the marker.
+
+**A:** Audited the impact and recommended three remediation
+options (full fix, content-only fix, scope-only fix, or nothing).
+Recommended **full fix** on three grounds: the marker's stance is
+already declared, half-fixes leave the design rationale internally
+inconsistent, and the cost is small relative to the marking impact.
+The student selected the full fix plus two refinements: extract
+only `<div class="quote">` / `<div class="author-details">`
+content, and dedupe quotes by `(quote_text, author)` so the same
+quote appearing on multiple pages is indexed only once.
+
+**A:** Rewrote `src/crawler.py` to:
+
+* perform full-site BFS over pagination, `/tag/...`, and
+  `/author/...` (213 URLs total);
+* extract content from `div.quote` blocks on listing pages and
+  `div.author-details` on author pages — everything else is
+  discarded;
+* deduplicate quotes globally by `(text, author)` so each quote
+  appears in the index at most once (canonical URL = first page
+  it was seen on, suffixed with `#quote-N`);
+* skip `/login` and any cross-domain link;
+* normalise URLs (drop fragments).
+
+**A:** Rewrote `tests/test_crawler.py` from scratch with 30 tests
+covering single-page, pagination, quote-level dedup, author detail
+extraction, chrome rejection, tag traversal, login filtering, error
+paths, URL normalisation, politeness, User-Agent, and three
+defensive boundary cases. Coverage: 100% (one branch marked
+`# pragma: no cover` — a pop-time visited check that is genuinely
+unreachable because the enqueue-time check already filters
+duplicates).
+
+**U:** Asked whether the changes worked against the real site.
+
+**A:** Ran `scripts/smoke_test.py --delay 0.5` against
+`quotes.toscrape.com` and reported:
+
+* 213 URLs fetched (matches the marker's count);
+* 150 unique documents indexed (100 distinct quotes + 50 author
+  detail pages);
+* 4 563 unique terms (versus 845 previously, because author
+  biographies add vocabulary that was not in the paginated
+  listings);
+* 2.2 MB on-disk index;
+* `find quotes` returns 1 document (was previously every page);
+* `find login` returns 0 documents (chrome successfully ignored);
+* `find einstein` returns 12 documents, with the author detail
+  page ranked first at score 12.
+
+**A:** Updated README to reflect the new numbers (150 documents,
+4 563 terms, 2.2 MB), rewrote the crawler design-decisions section
+to explain full-site BFS, content extraction, and quote dedup, and
+replaced obsolete claims (e.g. "friends appears on every page so
+naive IDF would zero it out" — no longer true with chrome
+stripped). Updated `docs/video_runbook.md` Section (a) to record
+the marker-approved build-pause-resume flow, and Section (b) to
+walk through the new content-extraction and dedup logic as the
+2:15-2:35 stop. Rewrote `docs/video_script.srt` with new
+subtitles for the same flow; total runtime still exactly 5:00,
+zero overlaps, zero fast subtitles.
+
+---
+
+## Summary statistics
+
+- **Number of stages assisted:** 8 (Tokenizer → CLI → TF-IDF →
+  README → Marker Q&A response).
+- **Number of design-decision question sets:** 8, totalling 27
+  binary/ternary questions, all answered by the student before any
+  code was generated.
+- **Lines of production code produced by AI and accepted by student:**
+  366 (across 7 modules in `src/`).
+- **Tests produced:** 183, all currently passing, 100% line coverage on
+  `src/`.
+- **Bugs introduced by AI and caught before the user ran the code:** 2
+  (crawler User-Agent `setdefault` no-op; two crawler tests missing a
+  mock for the follow-up page URL).
+- **Bugs introduced by AI and caught by the AI's own test run:** 1
+  (logically over-claiming TF-IDF test; the test was wrong, not the
+  production code).
+- **Environment-setup issues raised by the student and diagnosed by
+  the AI:** 3 (missing `python3-venv` package, wrong pytest invocation,
+  empty venv after activation).
+- **Self-corrections after critical feedback:** 1 (the student rejected
+  the original Section (b) walkthrough as "playing it safe" — focused
+  on brief-mandated requirements rather than self-directed decisions
+  — and the AI redesigned it around five algorithmic choices that
+  match the 70+ and 80+ rubric bands).
