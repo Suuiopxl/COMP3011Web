@@ -12,24 +12,32 @@ A single in-memory ``dict`` with three top-level keys::
     {
         "index": {
             "good": {
-                "df": 3,
+                "df": 14,
                 "postings": {
-                    "https://quotes.toscrape.com/page/1/": {
+                    "https://quotes.toscrape.com/page/4/#quote-3": {
                         "tf": 2,
-                        "positions": [5, 42]
+                        "positions": [3, 8]
                     },
-                    "https://quotes.toscrape.com/page/4/": {
+                    "https://quotes.toscrape.com/author/J-K-Rowling": {
                         "tf": 1,
-                        "positions": [17]
+                        "positions": [47]
                     }
                 }
             }
         },
         "doc_lengths": {
-            "https://quotes.toscrape.com/page/1/": 245
+            "https://quotes.toscrape.com/page/4/#quote-3": 25,
+            "https://quotes.toscrape.com/author/J-K-Rowling": 110
         },
-        "num_docs": 10
+        "num_docs": 150
     }
+
+Each document URL ends with either ``#quote-N`` (a unique quote
+deduplicated across pages) or ``/author/<name>`` (an author detail
+page). This is the granularity at which we index — one document per
+unique quote, one document per author, never one document per HTML
+page. Quote dedup is performed inside the crawler so the indexer
+itself sees only unique documents.
 
 """
 
@@ -75,9 +83,12 @@ def build_index(pages: Iterable[CrawledPage]) -> Index:
     Parameters
     ----------
     pages:
-        Anything yielding :class:`CrawledPage` (URL + visible text).
-        The caller is responsible for deduplicating URLs; the
-        :class:`~src.crawler.Crawler` already does this.
+        Anything yielding :class:`CrawledPage` (document URL + already-
+        extracted core content). The caller — typically
+        :class:`~src.crawler.Crawler` — is responsible for content
+        extraction and quote-level deduplication, so the indexer sees
+        only unique documents whose text is already free of site-wide
+        chrome (header, nav, sidebar, footer).
 
     Returns
     -------

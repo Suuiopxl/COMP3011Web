@@ -221,8 +221,9 @@ def _parse_cli_args(argv=None) -> argparse.Namespace:
 
 def main(argv=None) -> int:
     args = _parse_cli_args(argv)
-    # Surface the crawler's INFO logs (e.g. "Crawl finished: 10 pages") so the
-    # user gets visible feedback during the long ``build`` operation.
+    # Surface the crawler's INFO logs (e.g. "Crawl finished: 213 URL(s)
+    # fetched, 150 unique document(s) indexed.") so the user gets visible
+    # feedback during the long ``build`` operation.
     logging.basicConfig(level=logging.INFO, format="    [%(levelname)s] %(message)s")
     shell = SearchEngineShell(
         base_url=args.base_url, delay=args.delay, index_path=args.index
